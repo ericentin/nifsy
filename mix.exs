@@ -1,8 +1,8 @@
-defmodule ReadNif.Mixfile do
+defmodule Nifsy.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :read_nif,
+    [app: :nifsy,
      version: "0.1.0",
      elixir: "~> 1.3",
      build_embedded: Mix.env == :prod,

@@ -1,4 +1,4 @@
-# ReadNif
+# Nifsy
 
 **TODO: Add description**
 
@@ -6,19 +6,18 @@
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
 
-  1. Add `read_nif` to your list of dependencies in `mix.exs`:
+  1. Add `nifsy` to your list of dependencies in `mix.exs`:
 
     ```elixir
     def deps do
-      [{:read_nif, "~> 0.1.0"}]
+      [{:nifsy, "~> 0.1.0"}]
     end
     ```
 
-  2. Ensure `read_nif` is started before your application:
+  2. Ensure `nifsy` is started before your application:
 
     ```elixir
     def application do
-      [applications: [:read_nif]]
+      [applications: [:nifsy]]
     end
     ```
-
