@@ -24,7 +24,6 @@ defmodule ReadNif do
               other ->
                 {[first_line | lines], no_line} = Enum.split(other, -1)
                 first_line = IO.iodata_to_binary([buf | first_line])
-                lines = Enum.map(lines, &IO.iodata_to_binary/1)
                 {[first_line | lines], {file_desc, no_line, pattern}}
             end
         end
