@@ -24,7 +24,7 @@ static int do_nifsy_close(nifsy_handle *handle, bool from_dtor)
   if (from_dtor) {
     int result = close(handle->file_descriptor);
     if (handle->read_buffer) {
-      enif_free(handle->read_buffer);
+      enif_release_binary(handle->read_buffer);
     }
     return result;
   } else {
@@ -91,12 +91,15 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 static ERL_NIF_TERM nifsy_write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 static ERL_NIF_TERM nifsy_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
+#define DIRTINESS 0
+// #define DIRTINESS ERL_NIF_DIRTY_JOB_IO_BOUND
+
 static ErlNifFunc nif_funcs[] = {
-  {"open", 1, nifsy_open, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"read", 3, nifsy_read, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"read_line", 2, nifsy_read_line, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"write", 2, nifsy_write, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"close", 1, nifsy_close, ERL_NIF_DIRTY_JOB_IO_BOUND}
+  {"open", 1, nifsy_open, DIRTINESS},
+  {"read", 3, nifsy_read, DIRTINESS},
+  {"read_line", 2, nifsy_read_line, DIRTINESS},
+  {"write", 2, nifsy_write, DIRTINESS},
+  {"close", 1, nifsy_close, DIRTINESS}
 };
 
 ERL_NIF_INIT(Elixir.Nifsy, nif_funcs, &on_load, NULL, NULL, NULL)
@@ -201,7 +204,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
   RW_LOCK;
 
-  if (handle->read_buffer_may_contain_line) {
+  if (handle->read_buffer && handle->read_buffer_may_contain_line) {
     unsigned char *newline;
     if ((newline = memchr(handle->read_buffer->data, '\n', handle->read_buffer->size))) {
       unsigned long line_size = (unsigned char*)newline - handle->read_buffer->data;
@@ -210,15 +213,17 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         ErlNifBinary *new_read_buffer = enif_alloc(sizeof(ErlNifBinary));
         HANDLE_ERROR(enif_alloc_binary(rest_size - 1, new_read_buffer), {RW_UNLOCK;}, MEMERR);
         memcpy(new_read_buffer->data, newline + 1, rest_size - 1);
-        RETURN_ERROR(enif_realloc_binary(handle->read_buffer, line_size), MEMERR);
+        HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, line_size), {RW_UNLOCK;}, MEMERR);
         ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
         handle->read_buffer = new_read_buffer;
+        RW_UNLOCK;
         return retval;
       } else {
-        RETURN_ERROR(enif_realloc_binary(handle->read_buffer, line_size), MEMERR);
+        HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, line_size), {RW_UNLOCK;}, MEMERR);
         ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
         handle->read_buffer = NULL;
         handle->read_buffer_may_contain_line = false;
+        RW_UNLOCK;
         return retval;
       }
     } else {
@@ -228,12 +233,16 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
   for (;;) {
     unsigned long offset = set_up_buffer(env, handle, read_ahead);
-    int nbytes_read = read(handle->file_descriptor, handle->read_buffer->data + offset, read_ahead);
+    unsigned long nbytes_read = read(handle->file_descriptor, handle->read_buffer->data + offset, read_ahead);
 
     HANDLE_ERROR_IF_NEG(nbytes_read, {RW_UNLOCK;}, "read");
 
     if (nbytes_read == 0) {
       return enif_make_atom(env, "eof");
+    }
+
+    if (nbytes_read < read_ahead) {
+      HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, offset + nbytes_read), {RW_UNLOCK;}, MEMERR);
     }
 
     // TODO: handle CRLF
@@ -249,18 +258,17 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
         handle->read_buffer = new_read_buffer;
         handle->read_buffer_may_contain_line = true;
+        RW_UNLOCK;
         return retval;
       } else {
         RETURN_ERROR(enif_realloc_binary(handle->read_buffer, line_size), MEMERR);
         ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
         handle->read_buffer = NULL;
+        RW_UNLOCK;
         return retval;
       }
     }
   }
-
-  RW_UNLOCK;
-  return enif_make_tuple2(env, enif_make_atom(env, "ok"), enif_make_binary(env, handle->read_buffer));
 }
 
 static ERL_NIF_TERM nifsy_write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])

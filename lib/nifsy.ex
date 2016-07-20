@@ -3,6 +3,25 @@ defmodule Nifsy do
 
   @app Mix.Project.config[:app]
 
+  def stream!(path, read_ahead \\ 4096) do
+    path = String.to_charlist(path)
+    Stream.resource(
+    fn ->
+      {:ok, handle} = open(path)
+      handle
+    end,
+    fn handle ->
+      case read_line(handle, read_ahead) do
+        :eof -> {:halt, handle}
+        line -> {[line], handle}
+      end
+    end,
+    fn handle ->
+      close(handle)
+    end
+    )
+  end
+
   @doc false
   def init do
     path = :filename.join(:code.priv_dir(@app), 'nifsy')
