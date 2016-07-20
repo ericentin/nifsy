@@ -3,7 +3,7 @@ defmodule Nifsy do
 
   @app Mix.Project.config[:app]
 
-  def stream!(path, read_ahead \\ 4096) do
+  def stream!(path, read_ahead \\ 8192) do
     path = String.to_charlist(path)
     Stream.resource(
     fn ->

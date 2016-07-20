@@ -14,7 +14,7 @@ typedef struct {
   bool closed;
   ErlNifRWLock *rwlock;
   ErlNifBinary *read_buffer;
-  bool read_buffer_may_contain_line;
+  unsigned long read_buffer_offset;
 } nifsy_handle;
 
 static int on_load(ErlNifEnv*, void**, ERL_NIF_TERM);
@@ -42,6 +42,14 @@ void nifsy_dtor(ErlNifEnv* env, void* arg)
     enif_rwlock_destroy(handle->rwlock);
   }
 }
+
+// #define DEBUG
+
+#ifdef DEBUG
+  #define DEBUG_LOG(format, string) printf(format, string)
+#else
+  #define DEBUG_LOG(format, string) NULL
+#endif
 
 #define RW_UNLOCK if (handle->rwlock != 0) enif_rwlock_rwunlock(handle->rwlock)
 #define RW_LOCK   if (handle->rwlock != 0) enif_rwlock_rwlock(handle->rwlock)
@@ -141,7 +149,7 @@ static ERL_NIF_TERM nifsy_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   handle->file_descriptor = file_descriptor;
   handle->closed = false;
   handle->read_buffer = NULL;
-  handle->read_buffer_may_contain_line = false;
+  handle->read_buffer_offset = 0;
 
   ERL_NIF_TERM resource = enif_make_resource(env, handle);
   enif_release_resource(handle);
@@ -204,68 +212,152 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
   RW_LOCK;
 
-  if (handle->read_buffer && handle->read_buffer_may_contain_line) {
-    unsigned char *newline;
-    if ((newline = memchr(handle->read_buffer->data, '\n', handle->read_buffer->size))) {
-      unsigned long line_size = (unsigned char*)newline - handle->read_buffer->data;
-      unsigned long rest_size = handle->read_buffer->size - line_size;
-      if (rest_size > 1) {
-        ErlNifBinary *new_read_buffer = enif_alloc(sizeof(ErlNifBinary));
-        HANDLE_ERROR(enif_alloc_binary(rest_size - 1, new_read_buffer), {RW_UNLOCK;}, MEMERR);
-        memcpy(new_read_buffer->data, newline + 1, rest_size - 1);
-        HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, line_size), {RW_UNLOCK;}, MEMERR);
-        ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
-        handle->read_buffer = new_read_buffer;
+  ErlNifBinary *new_line_buffer = NULL;
+
+  if (handle->read_buffer && handle->read_buffer_offset != 0) {
+    DEBUG_LOG("%s\n", "a buffer exists");
+    unsigned char *newline, *rem_data = handle->read_buffer->data + handle->read_buffer_offset;
+    unsigned long rem_data_size = handle->read_buffer->size - handle->read_buffer_offset;
+
+    HANDLE_ERROR(new_line_buffer = enif_alloc(sizeof(ErlNifBinary)), {RW_UNLOCK;}, MEMERR);
+
+    if ((newline = memchr(rem_data, '\n', rem_data_size))) {
+      DEBUG_LOG("%s\n", "b newline found");
+      unsigned long line_size = newline - rem_data;
+
+      HANDLE_ERROR(enif_alloc_binary(line_size, new_line_buffer), {
+        enif_free(new_line_buffer);
         RW_UNLOCK;
-        return retval;
-      } else {
-        HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, line_size), {RW_UNLOCK;}, MEMERR);
-        ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
-        handle->read_buffer = NULL;
-        handle->read_buffer_may_contain_line = false;
-        RW_UNLOCK;
-        return retval;
-      }
+      }, MEMERR);
+
+      memcpy(new_line_buffer->data, rem_data, line_size);
+      ERL_NIF_TERM new_line_term = enif_make_binary(env, new_line_buffer);
+      handle->read_buffer_offset = handle->read_buffer_offset + line_size + 1;
+      RW_UNLOCK;
+
+      return new_line_term;
     } else {
-      handle->read_buffer_may_contain_line = false;
+      DEBUG_LOG("%s\n", "c newline not found");
+      HANDLE_ERROR(enif_alloc_binary(rem_data_size, new_line_buffer), {
+        enif_free(new_line_buffer);
+        RW_UNLOCK;
+      }, MEMERR);
+
+      memcpy(new_line_buffer->data, rem_data, rem_data_size);
+      enif_release_binary(handle->read_buffer);
+      enif_free(handle->read_buffer);
+      handle->read_buffer = NULL;
+      handle->read_buffer_offset = 0;
     }
   }
 
-  for (;;) {
-    unsigned long offset = set_up_buffer(env, handle, read_ahead);
-    unsigned long nbytes_read = read(handle->file_descriptor, handle->read_buffer->data + offset, read_ahead);
+  if (!handle->read_buffer) {
+    DEBUG_LOG("%s\n", "d buffer create");
+    HANDLE_ERROR(handle->read_buffer = enif_alloc(sizeof(ErlNifBinary)), {RW_UNLOCK;}, MEMERR);
+    HANDLE_ERROR(enif_alloc_binary(read_ahead, handle->read_buffer), {
+      if (new_line_buffer) {
+        enif_release_binary(new_line_buffer);
+        enif_free(new_line_buffer);
+      }
+      enif_free(handle->read_buffer);
+      RW_UNLOCK;
+    }, MEMERR);
+    handle->read_buffer_offset = 0;
+  }
 
-    HANDLE_ERROR_IF_NEG(nbytes_read, {RW_UNLOCK;}, "read");
+  while (true) {
+    DEBUG_LOG("%s\n", "e loop start");
+    unsigned long nbytes_read;
+    HANDLE_ERROR_IF_NEG(nbytes_read = read(handle->file_descriptor, handle->read_buffer->data, read_ahead), {
+      if (new_line_buffer) {
+        enif_release_binary(new_line_buffer);
+        enif_free(new_line_buffer);
+      }
+      RW_UNLOCK;
+    }, MEMERR);
 
-    if (nbytes_read == 0) {
-      return enif_make_atom(env, "eof");
+    if (!nbytes_read) {
+      DEBUG_LOG("%s\n", "f no bytes read");
+      if (new_line_buffer) {
+        DEBUG_LOG("%s\n", "g buffer existed");
+        RW_UNLOCK;
+        return enif_make_binary(env, new_line_buffer);
+      } else {
+        DEBUG_LOG("%s\n", "h eof");
+        RW_UNLOCK;
+        return enif_make_atom(env, "eof");
+      }
     }
 
     if (nbytes_read < read_ahead) {
-      HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, offset + nbytes_read), {RW_UNLOCK;}, MEMERR);
+      DEBUG_LOG("%s\n", "i less bytes read");
+      HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, nbytes_read), {
+        if (new_line_buffer) {
+          enif_release_binary(new_line_buffer);
+          enif_free(new_line_buffer);
+        }
+        RW_UNLOCK;
+      }, MEMERR);
     }
 
-    // TODO: handle CRLF
     unsigned char *newline;
-    if ((newline = memchr(handle->read_buffer->data + offset, '\n', nbytes_read))) {
-      unsigned long line_size = (unsigned char*)newline - handle->read_buffer->data;
-      unsigned long rest_size = handle->read_buffer->size - line_size;
-      if (rest_size > 1) {
-        ErlNifBinary *new_read_buffer = enif_alloc(sizeof(ErlNifBinary));
-        HANDLE_ERROR(enif_alloc_binary(rest_size - 1, new_read_buffer), {RW_UNLOCK;}, MEMERR);
-        memcpy(new_read_buffer->data, newline + 1, rest_size - 1);
-        RETURN_ERROR(enif_realloc_binary(handle->read_buffer, line_size), MEMERR);
-        ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
-        handle->read_buffer = new_read_buffer;
-        handle->read_buffer_may_contain_line = true;
+    if ((newline = memchr(handle->read_buffer->data, '\n', handle->read_buffer->size))) {
+      DEBUG_LOG("%s\n", "j newline found in read");
+      unsigned long line_size = newline - handle->read_buffer->data;
+
+      if (new_line_buffer) {
+        DEBUG_LOG("%s\n", "k new line buffer existed");
+        unsigned long orig_size = new_line_buffer->size;
+
+        HANDLE_ERROR(enif_realloc_binary(new_line_buffer, new_line_buffer->size + line_size), {
+          enif_free(new_line_buffer);
+          RW_UNLOCK;
+        }, MEMERR);
+
+        memcpy(new_line_buffer->data + orig_size, handle->read_buffer->data, line_size);
+        ERL_NIF_TERM new_line_term = enif_make_binary(env, new_line_buffer);
+        handle->read_buffer_offset = handle->read_buffer_offset + line_size + 1;
         RW_UNLOCK;
-        return retval;
+
+        return new_line_term;
       } else {
-        RETURN_ERROR(enif_realloc_binary(handle->read_buffer, line_size), MEMERR);
-        ERL_NIF_TERM retval = enif_make_binary(env, handle->read_buffer);
-        handle->read_buffer = NULL;
+        DEBUG_LOG("%s\n", "l new line buffer create");
+        HANDLE_ERROR(new_line_buffer = enif_alloc(sizeof(ErlNifBinary)), {RW_UNLOCK;}, MEMERR);
+        HANDLE_ERROR(enif_alloc_binary(line_size, new_line_buffer), {
+          enif_free(new_line_buffer);
+          RW_UNLOCK;
+        }, MEMERR);
+
+        memcpy(new_line_buffer->data, handle->read_buffer->data, line_size);
+        ERL_NIF_TERM new_line_term = enif_make_binary(env, new_line_buffer);
+        handle->read_buffer_offset = handle->read_buffer_offset + line_size + 1;
         RW_UNLOCK;
-        return retval;
+
+        return new_line_term;
+      }
+    } else {
+      DEBUG_LOG("%s\n", "m newline not found");
+      if (new_line_buffer) {
+        DEBUG_LOG("%s\n", "n new line buffer exists");
+        unsigned long orig_size = new_line_buffer->size;
+
+        HANDLE_ERROR(enif_realloc_binary(new_line_buffer, new_line_buffer->size + handle->read_buffer->size), {
+          enif_free(new_line_buffer);
+          RW_UNLOCK;
+        }, MEMERR);
+
+        memcpy(new_line_buffer->data + orig_size, handle->read_buffer->data, handle->read_buffer->size);
+        handle->read_buffer_offset = 0;
+      } else {
+        DEBUG_LOG("%s\n", "o new line buffer not found");
+        HANDLE_ERROR(new_line_buffer = enif_alloc(sizeof(ErlNifBinary)), {RW_UNLOCK;}, MEMERR);
+        HANDLE_ERROR(enif_alloc_binary(handle->read_buffer->size, new_line_buffer), {
+          enif_free(new_line_buffer);
+          RW_UNLOCK;
+        }, MEMERR);
+
+        memcpy(new_line_buffer->data, handle->read_buffer->data, handle->read_buffer->size);
+        handle->read_buffer_offset = 0;
       }
     }
   }
