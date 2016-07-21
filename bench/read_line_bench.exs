@@ -30,15 +30,16 @@ defmodule Nifsy.ReadLineBench do
 
   def benchmark() do
     Enum.each(@test_files, &maybe_generate_file_with_lines/1)
-    IO.puts "name\t\t\ttotal\t\tusec/iter\tusec/line"
+    IO.puts "| name                | total      | usec/iter    | usec/line |"
+    IO.puts "| ------------------- | ---------- | ------------ | --------- |"
     Enum.each @benchmarks, fn {name, bench, args} ->
       if ("nifsy" in System.argv and bench == :nifsy_bench) or not "nifsy" in System.argv do
         {u_sec, avg_u_sec, u_sec_per_line} = Task.async(__MODULE__, bench, args) |> Task.await(60_000)
         IO.puts [
-          "#{name}\t",
-          "#{String.pad_trailing(to_string(u_sec), 10)}\t",
-          "#{String.pad_trailing(to_string(avg_u_sec), 12)}\t",
-          "#{String.pad_trailing(to_string(Float.round(u_sec_per_line, 3)), 6)}"
+          "| #{String.pad_trailing(name, 19)} | ",
+          "#{String.pad_trailing(to_string(u_sec), 10)} | ",
+          "#{String.pad_trailing(to_string(avg_u_sec), 12)} | ",
+          "#{String.pad_trailing(to_string(Float.round(u_sec_per_line, 3)), 9)} |"
         ]
       end
     end
