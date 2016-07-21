@@ -116,6 +116,7 @@ defmodule Nifsy.ReadLineBench do
   end
 
   defp generate_file_with_lines(filename, file_size) do
+    :ok = :filelib.ensure_dir(filename)
     {:ok, io_device} = :file.open(filename, [:binary, :raw, :write])
 
     write_loop =
@@ -135,8 +136,8 @@ defmodule Nifsy.ReadLineBench do
   end
 
   defp maybe_generate_file_with_lines({filename, file_size}) do
-    case File.stat(filename) do
-      {:ok, %File.Stat{size: ^file_size}} ->
+    case :filelib.file_size(filename) do
+      ^file_size ->
         :ok
       _ ->
         IO.puts "Generating #{filename} of size #{file_size}..."
