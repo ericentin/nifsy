@@ -28,6 +28,6 @@ defmodule Nifsy.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:elixir_make, ">= 0.0.0"}]
+    [{:elixir_make, "~> 0.3"}]
   end
 end

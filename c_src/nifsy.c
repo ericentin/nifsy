@@ -171,7 +171,7 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   ErlNifBinary binary;
   HANDLE_ERROR(enif_alloc_binary(nbytes, &binary), {RW_UNLOCK;}, MEMERR);
 
-  int nbytes_read;
+  unsigned long nbytes_read;
   HANDLE_ERROR_IF_NEG(nbytes_read = read(handle->file_descriptor, binary.data, nbytes), {
     RW_UNLOCK;
     enif_release_binary(&binary);

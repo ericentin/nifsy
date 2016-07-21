@@ -22,3 +22,4 @@ priv/nifsy.so: c_src/nifsy.c
 
 clean:
 	$(RM) priv/nifsy.so
+	$(RM) -rf priv/nifsy.so.dSYM
