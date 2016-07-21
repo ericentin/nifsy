@@ -157,22 +157,6 @@ static ERL_NIF_TERM nifsy_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   return enif_make_tuple2(env, enif_make_atom(env, "ok"), resource);
 }
 
-static unsigned long set_up_buffer(ErlNifEnv *env, nifsy_handle *handle, unsigned long add_length) {
-  unsigned long offset;
-
-  if (handle->read_buffer) {
-    offset = handle->read_buffer->size;
-    unsigned long new_size = handle->read_buffer->size + add_length;
-    HANDLE_ERROR(enif_realloc_binary(handle->read_buffer, new_size), {RW_UNLOCK;}, MEMERR);
-  } else {
-    offset = 0;
-    HANDLE_ERROR(handle->read_buffer = enif_alloc(sizeof(ErlNifBinary)), {RW_UNLOCK;}, MEMERR);
-    HANDLE_ERROR(enif_alloc_binary(add_length, handle->read_buffer), {RW_UNLOCK;}, MEMERR);
-  }
-
-  return offset;
-}
-
 static ERL_NIF_TERM nifsy_read(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   nifsy_handle *handle;
