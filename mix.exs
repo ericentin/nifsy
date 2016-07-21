@@ -8,6 +8,8 @@ defmodule Nifsy.Mixfile do
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      compilers: [:elixir_make] ++ Mix.compilers,
+     make_env: %{"MIX_ENV" => to_string(Mix.env)},
+     make_clean: ["clean"],
      deps: deps()]
   end
 

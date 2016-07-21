@@ -2,44 +2,45 @@ defmodule Nifsy do
   @on_load {:init, 0}
 
   @app Mix.Project.config[:app]
+  @env Mix.env
+
+  @flags [:read, :write, :append, :create, :exclusive, :truncate, :sync, :rsync, :dsync, :lock]
 
   def stream!(path, read_ahead \\ 8192) do
     path = String.to_charlist(path)
     Stream.resource(
     fn ->
-      {:ok, handle} = open(path)
+      {:ok, handle} = open(path, read_ahead, [:read])
       handle
     end,
     fn handle ->
-      case read_line(handle, read_ahead) do
+      case read_line(handle) do
         :eof -> {:halt, handle}
         line -> {[line], handle}
       end
     end,
-    fn handle ->
-      close(handle)
-    end
+    &close/1
     )
   end
 
   @doc false
   def init do
-    path = :filename.join(:code.priv_dir(@app), 'nifsy')
+    path = :filename.join(:code.priv_dir(@app), to_charlist(@env) ++ '/nifsy')
     :ok = :erlang.load_nif(path, 0)
   end
 
   @doc false
-  def open(_path) do
+  def open(_path, _buffer_alloc, _options) do
     exit(:nif_library_not_loaded)
   end
 
   @doc false
-  def read(_file_desc, _num_bytes, _read_ahead) do
+  def read(_file_desc, _num_bytes) do
     exit(:nif_library_not_loaded)
   end
 
   @doc false
-  def read_line(_file_desc, _num_bytes_per_read) do
+  def read_line(_file_desc) do
     exit(:nif_library_not_loaded)
   end
 

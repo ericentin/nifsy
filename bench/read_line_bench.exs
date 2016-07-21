@@ -6,6 +6,8 @@ defmodule Nifsy.ReadLineBench do
   ]
 
   @benchmarks [
+    {"1 KB (16 B) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 16,                 45]},
+    {"1 KB (16 B) - file",  :file_bench,  [50, 'tmp/kilobyte.txt', 16,                 45]},
     {"1 KB (1 KB) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 1024,               45]},
     {"1 KB (1 KB) - file",  :file_bench,  [50, 'tmp/kilobyte.txt', 1024,               45]},
     {"1 KB (64KB) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 65536,              45]},
@@ -60,7 +62,7 @@ defmodule Nifsy.ReadLineBench do
   def nifsy_bench(n, filename, read_ahead_bytes, num_lines) do
     read_line_loop =
       fn (f, file_desc, size) ->
-        case Nifsy.read_line(file_desc, read_ahead_bytes) do
+        case Nifsy.read_line(file_desc) do
           :eof -> size
           line -> f.(f, file_desc, size + byte_size(line) + 1)
         end
@@ -73,7 +75,7 @@ defmodule Nifsy.ReadLineBench do
 
     arguments =
       fn () ->
-        {:ok, file_desc} = Nifsy.open(filename)
+        {:ok, file_desc} = Nifsy.open(filename, read_ahead_bytes, [:read])
         [file_desc]
       end
 
