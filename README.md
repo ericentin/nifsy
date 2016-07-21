@@ -8,7 +8,6 @@ You can use `mix run bench/<file>` to run a benchmark.
 
 For read_line, `mix run bench/read_line_bench.exs`:
 
-```
 name                | total    | usec/iter | usec/line
 1 KB (1 KB) - nifsy | 1021     | 20.42     | 0.454
 1 KB (1 KB) - file  | 7946     | 158.92    | 3.532
@@ -28,4 +27,3 @@ name                | total    | usec/iter | usec/line
 1 GB (1 MB) - file  | 4834672  | 483467.2  | 10.433
 1 GB (1 GB) - nifsy | 36739982 | 3673998.2 | 79.282
 1 GB (1 GB) - file  | 24542805 | 2454280.5 | 52.961
-```
