@@ -98,6 +98,10 @@ static ERL_NIF_TERM ATOM_LOCK;
 #endif
 
 static int nifsy_do_close(nifsy_handle *handle, bool from_dtor) {
+  if (!handle->closed && handle->mode & O_WRONLY && handle->buffer_offset) {
+    write(handle->file_descriptor, handle->buffer->data, handle->buffer_offset);
+  }
+
   if (from_dtor) {
     int result = close(handle->file_descriptor);
     if (handle->buffer) {
@@ -275,7 +279,8 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return enif_make_binary(env, &return_bytes);
+      return enif_make_tuple2(env, ATOM_OK,
+                              enif_make_binary(env, &return_bytes));
     } else {
       DEBUG_LOG("c not enough data");
       memcpy(return_bytes.data, rem_data, rem_data_size);
@@ -304,12 +309,13 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
         HANDLE_ERROR(enif_realloc_binary(&return_bytes, return_bytes_offset),
                      { RW_UNLOCK; }, MEMERR);
         RW_UNLOCK;
-        return enif_make_binary(env, &return_bytes);
+        return enif_make_tuple2(env, ATOM_OK,
+                                enif_make_binary(env, &return_bytes));
       } else {
         DEBUG_LOG("g eof");
         enif_release_binary(&return_bytes);
         RW_UNLOCK;
-        return enif_make_atom(env, "eof");
+        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
       }
     }
 
@@ -323,7 +329,8 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return enif_make_binary(env, &return_bytes);
+      return enif_make_tuple2(env, ATOM_OK,
+                              enif_make_binary(env, &return_bytes));
     } else {
       DEBUG_LOG("i not enough bytes");
       memcpy(return_bytes.data + return_bytes_offset, handle->buffer->data,
@@ -370,7 +377,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return new_line_term;
+      return enif_make_tuple2(env, ATOM_OK, new_line_term);
     } else {
       DEBUG_LOG("c newline not found");
       HANDLE_ERROR(enif_alloc_binary(rem_data_size, &new_line_buffer),
@@ -401,11 +408,12 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
       if (new_line_buffer.data) {
         DEBUG_LOG("g buffer existed");
         RW_UNLOCK;
-        return enif_make_binary(env, &new_line_buffer);
+        return enif_make_tuple2(env, ATOM_OK,
+                                enif_make_binary(env, &new_line_buffer));
       } else {
         DEBUG_LOG("h eof");
         RW_UNLOCK;
-        return enif_make_atom(env, "eof");
+        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
       }
     }
 
@@ -428,7 +436,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
         handle->buffer_offset = handle->buffer_offset + line_size + 1;
         RW_UNLOCK;
 
-        return new_line_term;
+        return enif_make_tuple2(env, ATOM_OK, new_line_term);
       } else {
         DEBUG_LOG("l new line buffer create");
         HANDLE_ERROR(enif_alloc_binary(line_size, &new_line_buffer),
@@ -439,7 +447,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
         handle->buffer_offset = handle->buffer_offset + line_size + 1;
         RW_UNLOCK;
 
-        return new_line_term;
+        return enif_make_tuple2(env, ATOM_OK, new_line_term);
       }
     } else {
       DEBUG_LOG("m newline not found");
@@ -469,7 +477,54 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
 
 static ERL_NIF_TERM nifsy_write(ErlNifEnv *env, int argc,
                                 const ERL_NIF_TERM argv[]) {
-  return enif_make_atom(env, "undef");
+  nifsy_handle *handle;
+  ErlNifBinary write_binary;
+
+  RETURN_BADARG(
+      enif_get_resource(env, argv[0], NIFSY_RESOURCE, (void **)&handle));
+  RETURN_BADARG(!handle->closed);
+  RETURN_BADARG(handle->mode & O_WRONLY);
+  RETURN_BADARG(enif_inspect_iolist_as_binary(env, argv[1], &write_binary));
+
+  RW_LOCK;
+
+  unsigned long remaining_buffer_bytes =
+      handle->buffer->size - handle->buffer_offset;
+
+  if (remaining_buffer_bytes > write_binary.size) {
+    memcpy(handle->buffer->data + handle->buffer_offset, write_binary.data,
+           write_binary.size);
+    handle->buffer_offset += write_binary.size;
+  } else {
+    unsigned long write_binary_offset = 0,
+                  write_binary_remaining = write_binary.size;
+
+    while (write_binary_remaining) {
+      memcpy(handle->buffer->data + handle->buffer_offset,
+             write_binary.data + write_binary_offset, remaining_buffer_bytes);
+
+      HANDLE_ERROR_IF_NEG(write(handle->file_descriptor, handle->buffer->data,
+                                handle->buffer->size),
+                          { RW_UNLOCK; });
+
+      write_binary_remaining -= remaining_buffer_bytes;
+      write_binary_offset += remaining_buffer_bytes;
+
+      if (write_binary_remaining < handle->buffer->size) {
+        memcpy(handle->buffer->data, write_binary.data + write_binary_offset,
+               write_binary_remaining);
+        handle->buffer_offset = write_binary_remaining;
+        write_binary_remaining = 0;
+      } else {
+        handle->buffer_offset = 0;
+        remaining_buffer_bytes = handle->buffer->size;
+      }
+    }
+  }
+
+  RW_UNLOCK;
+
+  return ATOM_OK;
 }
 
 static ERL_NIF_TERM nifsy_close(ErlNifEnv *env, int argc,

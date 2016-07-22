@@ -4,7 +4,7 @@ defmodule Nifsy do
   @app Mix.Project.config[:app]
   @env Mix.env
 
-  @flags [:read, :write, :append, :create, :exclusive, :truncate, :sync, :rsync, :dsync, :lock]
+  @flags [:read, :write, :append, :create, :exclusive, :truncate, :sync, :dsync, :lock]
 
   def stream!(path, read_ahead \\ 8192) do
     path = String.to_charlist(path)
@@ -15,8 +15,8 @@ defmodule Nifsy do
     end,
     fn handle ->
       case read_line(handle) do
-        :eof -> {:halt, handle}
-        line -> {[line], handle}
+        {:ok, :eof} -> {:halt, handle}
+        {:ok, line} -> {[line], handle}
       end
     end,
     &close/1
