@@ -29,19 +29,42 @@ defmodule Nifsy.ReadLineBench do
   ]
 
   def benchmark() do
+    if "perf" in System.argv do
+      :erlang.system_monitor(self(), [
+        :busy_port,
+        :busy_dist_port,
+        long_gc: 10,
+        large_heap: 1024 * 1024,
+        long_schedule: 10
+      ])
+    end
     Enum.each(@test_files, &maybe_generate_file_with_lines/1)
-    IO.puts "| name                | total      | usec/iter    | usec/line |"
-    IO.puts "| ------------------- | ---------- | ------------ | --------- |"
-    Enum.each @benchmarks, fn {name, bench, args} ->
+    :io.format(
+      '| ~-19s | ~10s | ~12s | ~10s |\n' ++
+      '| ~-19c | ~9c: | ~11c: | ~9c: |\n',
+      [ "name", "total", "usec/iter", "usec/line", ?-, ?-, ?-, ?- ])
+    pids = Enum.reduce @benchmarks, %{}, fn {name, bench, args}, acc ->
       if ("nifsy" in System.argv and bench == :nifsy_bench) or not "nifsy" in System.argv do
-        {u_sec, avg_u_sec, u_sec_per_line} = Task.async(__MODULE__, bench, args) |> Task.await(60_000)
-        IO.puts [
-          "| #{String.pad_trailing(name, 19)} | ",
-          "#{String.pad_trailing(to_string(u_sec), 10)} | ",
-          "#{String.pad_trailing(to_string(avg_u_sec), 12)} | ",
-          "#{String.pad_trailing(to_string(Float.round(u_sec_per_line, 3)), 9)} |"
-        ]
+        task = Task.async(__MODULE__, bench, args)
+        {u_sec, avg_u_sec, u_sec_per_line} = task |> Task.await(60_000)
+        :io.format('| ~-19s | ~10w | ~12.2f | ~10.3f |\n', [
+          name,
+          u_sec,
+          Float.round(avg_u_sec, 2),
+          Float.round(u_sec_per_line, 3)
+        ])
+        Map.put(acc, task.pid, name)
+      else
+        acc
       end
+    end
+    if "perf" in System.argv do
+      :io.format(
+        '\n' ++
+        '| ~-19s | ~16s | ~12s | ~-10s |\n' ++
+        '| ~19c | ~15c: | ~11c: | ~10c |\n',
+        [ "name", "metric", "total/freq", "report", ?-, ?-, ?-, ?- ])
+      flush_system_monitor(pids, %{})
     end
   end
 
@@ -116,6 +139,50 @@ defmodule Nifsy.ReadLineBench do
 
     {acc_u_sec, avg_u_sec} = benchmark(n, function, arguments, cleanup)
     {acc_u_sec, avg_u_sec, avg_u_sec / num_lines}
+  end
+
+  defp flush_system_monitor(pids, stats) do
+    receive do
+      {:monitor, pid_or_port, metric, report} ->
+        increment = &(&1 + 1)
+        update = &(Map.update(&1, report, 1, increment))
+        case Map.fetch(pids, pid_or_port) do
+          {:ok, name} ->
+            stats = Map.update(stats, {name, metric}, %{ report => 1 }, update)
+            flush_system_monitor(pids, stats)
+          :error ->
+            stats = Map.update(stats, {inspect(pid_or_port), metric}, %{ report => 1 }, update)
+            flush_system_monitor(pids, stats)
+        end
+    after
+      # Give the system monitor time to finish sending any reports.
+      1000 ->
+        sorted_stats =
+          stats
+          |> Enum.sort_by(&(&1 |> elem(1) |> Map.values() |> Enum.sum()))
+          |> Enum.reverse()
+        Enum.each sorted_stats, fn {{name, metric}, reports} ->
+          :io.format('| ~-19s | ~16s | ~-12s | ~-10s |\n', [
+            name,
+            to_string(metric),
+            reports |> Map.values() |> Enum.sum() |> to_string(),
+            ""
+          ])
+          sorted_reports =
+            reports
+            |> Enum.sort_by(&(elem(&1, 1)))
+            |> Enum.reverse()
+          Enum.each sorted_reports, fn {report, freq} ->
+            :io.format('| ~-19s | ~16s | ~12s | `~s` |\n', [
+              "",
+              "",
+              to_string(freq),
+              inspect(report)
+            ])
+          end
+        end
+        :ok
+    end
   end
 
   defp generate_file_with_lines(filename, file_size) do
