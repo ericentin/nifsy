@@ -10,6 +10,7 @@ defmodule Nifsy.Mixfile do
      compilers: [:elixir_make] ++ Mix.compilers,
      make_env: %{"MIX_ENV" => to_string(Mix.env)},
      make_clean: ["clean"],
+     make_cwd: "c_src",
      deps: deps()]
   end
 
