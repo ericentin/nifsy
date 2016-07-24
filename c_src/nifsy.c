@@ -527,6 +527,28 @@ static ERL_NIF_TERM nifsy_write(ErlNifEnv *env, int argc,
   return ATOM_OK;
 }
 
+static ERL_NIF_TERM nifsy_flush(ErlNifEnv *env, int argc,
+                                const ERL_NIF_TERM argv[]) {
+  nifsy_handle *handle;
+  RETURN_BADARG(
+      enif_get_resource(env, argv[0], NIFSY_RESOURCE, (void **)&handle));
+  RETURN_BADARG(!handle->closed);
+  RETURN_BADARG(handle->mode & O_WRONLY);
+
+  RW_LOCK;
+
+  if (handle->buffer_offset) {
+    HANDLE_ERROR_IF_NEG(write(handle->file_descriptor, handle->buffer->data,
+                              handle->buffer_offset),
+                        { RW_UNLOCK; });
+    handle->buffer_offset = 0;
+  }
+
+  RW_UNLOCK;
+
+  return ATOM_OK;
+}
+
 static ERL_NIF_TERM nifsy_close(ErlNifEnv *env, int argc,
                                 const ERL_NIF_TERM argv[]) {
   nifsy_handle *handle;
@@ -546,6 +568,7 @@ static ErlNifFunc nif_funcs[] = {{"open", 3, nifsy_open, DIRTINESS},
                                  {"read", 2, nifsy_read, DIRTINESS},
                                  {"read_line", 1, nifsy_read_line, DIRTINESS},
                                  {"write", 2, nifsy_write, DIRTINESS},
+                                 {"flush", 1, nifsy_flush, DIRTINESS},
                                  {"close", 1, nifsy_close, DIRTINESS}};
 
-ERL_NIF_INIT(Elixir.Nifsy, nif_funcs, &nifsy_on_load, NULL, NULL, NULL)
+ERL_NIF_INIT(Elixir.Nifsy.Native, nif_funcs, &nifsy_on_load, NULL, NULL, NULL)
