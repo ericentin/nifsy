@@ -6,25 +6,25 @@ defmodule Nifsy.ReadLineBench do
   ]
 
   @benchmarks [
-    {"1 KB (16 B) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 16,                 45]},
+    {"1 KB (16 B) - nifsy", :nifsy_bench, [50, "tmp/kilobyte.txt", 16,                 45]},
     {"1 KB (16 B) - file",  :file_bench,  [50, 'tmp/kilobyte.txt', 16,                 45]},
-    {"1 KB (1 KB) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 1024,               45]},
+    {"1 KB (1 KB) - nifsy", :nifsy_bench, [50, "tmp/kilobyte.txt", 1024,               45]},
     {"1 KB (1 KB) - file",  :file_bench,  [50, 'tmp/kilobyte.txt', 1024,               45]},
-    {"1 KB (64KB) - nifsy", :nifsy_bench, [50, 'tmp/kilobyte.txt', 65536,              45]},
+    {"1 KB (64KB) - nifsy", :nifsy_bench, [50, "tmp/kilobyte.txt", 65536,              45]},
     {"1 KB (64KB) - file",  :file_bench,  [50, 'tmp/kilobyte.txt', 65536,              45]},
-    {"1 MB (1 KB) - nifsy", :nifsy_bench, [50, 'tmp/megabyte.txt', 1024,               1448]},
+    {"1 MB (1 KB) - nifsy", :nifsy_bench, [50, "tmp/megabyte.txt", 1024,               1448]},
     {"1 MB (1 KB) - file",  :file_bench,  [50, 'tmp/megabyte.txt', 1024,               1448]},
-    {"1 MB (64KB) - nifsy", :nifsy_bench, [50, 'tmp/megabyte.txt', 65536,              1448]},
+    {"1 MB (64KB) - nifsy", :nifsy_bench, [50, "tmp/megabyte.txt", 65536,              1448]},
     {"1 MB (64KB) - file",  :file_bench,  [50, 'tmp/megabyte.txt', 65536,              1448]},
-    {"1 MB (1 MB) - nifsy", :nifsy_bench, [50, 'tmp/megabyte.txt', 1024 * 1024,        1448]},
+    {"1 MB (1 MB) - nifsy", :nifsy_bench, [50, "tmp/megabyte.txt", 1024 * 1024,        1448]},
     {"1 MB (1 MB) - file",  :file_bench,  [50, 'tmp/megabyte.txt', 1024 * 1024,        1448]},
-    {"1 GB (1 KB) - nifsy", :nifsy_bench, [10, 'tmp/gigabyte.txt', 1024,               46341]},
+    {"1 GB (1 KB) - nifsy", :nifsy_bench, [10, "tmp/gigabyte.txt", 1024,               46341]},
     {"1 GB (1 KB) - file",  :file_bench,  [10, 'tmp/gigabyte.txt', 1024,               46341]},
-    {"1 GB (64KB) - nifsy", :nifsy_bench, [10, 'tmp/gigabyte.txt', 65536,              46341]},
+    {"1 GB (64KB) - nifsy", :nifsy_bench, [10, "tmp/gigabyte.txt", 65536,              46341]},
     {"1 GB (64KB) - file",  :file_bench,  [10, 'tmp/gigabyte.txt', 65536,              46341]},
-    {"1 GB (1 MB) - nifsy", :nifsy_bench, [10, 'tmp/gigabyte.txt', 1024 * 1024,        46341]},
+    {"1 GB (1 MB) - nifsy", :nifsy_bench, [10, "tmp/gigabyte.txt", 1024 * 1024,        46341]},
     {"1 GB (1 MB) - file",  :file_bench,  [10, 'tmp/gigabyte.txt', 1024 * 1024,        46341]},
-    {"1 GB (1 GB) - nifsy", :nifsy_bench, [10, 'tmp/gigabyte.txt', 1024 * 1024 * 1024, 46341]},
+    {"1 GB (1 GB) - nifsy", :nifsy_bench, [10, "tmp/gigabyte.txt", 1024 * 1024 * 1024, 46341]},
     {"1 GB (1 GB) - file",  :file_bench,  [10, 'tmp/gigabyte.txt', 1024 * 1024 * 1024, 46341]}
   ]
 
@@ -87,8 +87,8 @@ defmodule Nifsy.ReadLineBench do
     read_line_loop =
       fn (f, file_desc, size) ->
         case Nifsy.read_line(file_desc) do
-          :eof -> size
-          line -> f.(f, file_desc, size + byte_size(line) + 1)
+          {:ok, :eof} -> size
+          {:ok, line} -> f.(f, file_desc, size + byte_size(line) + 1)
         end
       end
 
@@ -99,7 +99,7 @@ defmodule Nifsy.ReadLineBench do
 
     arguments =
       fn () ->
-        {:ok, file_desc} = Nifsy.open(filename, read_ahead_bytes, [:read])
+        {:ok, file_desc} = Nifsy.open(filename, :read, [buffer_bytes: read_ahead_bytes])
         [file_desc]
       end
 
