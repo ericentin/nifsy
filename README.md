@@ -18,7 +18,7 @@ You should also read the section below, since there are certain caveats to be aw
 
 If dirty schedulers are not enabled (and they probably are not, unless you have compiled OTP yourself with `./configure --enable-dirty-schedulers`), it is important to note that all Nifsy operations could block for an indefinite amount of time. Since the BEAM's scheduler expects all NIFs to complete in approximately 1ms, this means that the scheduler could become entirely blocked with FS ops, resulting in impacts to overall latency. Additionally, NIFs which take too much time to execute can result in "scheduler collapse," which is a serious condition in which the BEAM may stop executing code without crashing. Thus, **if you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.** Let me say that again:
 
-**If you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.**
+### **If you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.**
 
 The value is in milliseconds, and should be configured based on your application's needs. Lower values may result in increased overhead due to unnecessary scheduler wakeups, and a high value may result in increased time spent doing nothing.
 
