@@ -1,4 +1,8 @@
 defmodule Nifsy do
+  @moduledoc """
+  The Nifsy API.
+  """
+
   alias Nifsy.{Handle, Native}
 
   @default_buffer_bytes 64 * 1024

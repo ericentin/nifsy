@@ -33,12 +33,16 @@ typedef struct {
 #endif
 
 #define RW_UNLOCK                                                              \
-  if (handle->rwlock != 0)                                                     \
-  enif_rwlock_rwunlock(handle->rwlock)
+  ({                                                                           \
+    if (handle->rwlock != 0)                                                   \
+      enif_rwlock_rwunlock(handle->rwlock);                                    \
+  })
 
 #define RW_LOCK                                                                \
-  if (handle->rwlock != 0)                                                     \
-  enif_rwlock_rwlock(handle->rwlock)
+  ({                                                                           \
+    if (handle->rwlock != 0)                                                   \
+      enif_rwlock_rwlock(handle->rwlock);                                      \
+  })
 
 #define RETURN_BADARG(code)                                                    \
   ({                                                                           \
