@@ -1,4 +1,6 @@
 defmodule Nifsy.Handle do
+  @moduledoc false
+
   defstruct [:buffer_bytes, :handle, :mode, :path]
 
   @opaque t :: %__MODULE__{

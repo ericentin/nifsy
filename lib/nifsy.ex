@@ -78,12 +78,12 @@ defmodule Nifsy do
     Native.read(handle.handle, bytes)
   end
 
-  @doc """
+  @doc ~S"""
   Read a line from `handle`.
 
   The handle must be in `:read` mode.
 
-  Lines are considered delimited by `"\\\\n"`, the delimiter is not returned, and using this
+  Lines are considered delimited by `"\n"`, the delimiter is not returned, and using this
   function with files with CRLF line endings will return the CR at the end of the line.
 
   After the final line has been returned, the function will return `{:ok, :eof}`.
