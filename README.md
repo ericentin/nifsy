@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/antipax/nifsy.svg?branch=master)](https://travis-ci.org/antipax/nifsy)
+
 # Nifsy
 
 A nifty Elixir NIF for the FS.
