@@ -100,8 +100,11 @@ static mode_t NIFSY_DEFAULT_PERM = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 #endif
 
 static int nifsy_do_close(nifsy_handle *handle, bool from_dtor) {
+  int result = 0;
+
   if (!handle->closed && handle->mode & O_WRONLY && handle->buffer_offset) {
-    write(handle->file_descriptor, handle->buffer->data, handle->buffer_offset);
+    result = write(handle->file_descriptor, handle->buffer->data,
+                   handle->buffer_offset);
   }
 
   if (from_dtor) {
@@ -114,7 +117,7 @@ static int nifsy_do_close(nifsy_handle *handle, bool from_dtor) {
     handle->closed = true;
   }
 
-  return 0;
+  return result;
 }
 
 static void nifsy_dtor(ErlNifEnv *env, void *arg) {
