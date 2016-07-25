@@ -52,3 +52,7 @@ For read_line, `mix run bench/read_line_bench.exs`:
 | 1 GB (1 MB) - file  |    4832690 |    483269.00 |     10.429 |
 | 1 GB (1 GB) - nifsy |   36451711 |   3645171.10 |     78.660 |
 | 1 GB (1 GB) - file  |   26565286 |   2656528.60 |     57.326 |
+
+## Development
+
+Nifsy C code should be formatted using the `clang-format` tool. Nifsy C code uses the default code style rules in `clang-format`, so there is no need to specify any specific preset. If you wish to contribute C code to Nifsy, please ensure your code is formatted properly before opening a PR.
