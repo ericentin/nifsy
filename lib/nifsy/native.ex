@@ -2,6 +2,7 @@ defmodule Nifsy.Native do
   @moduledoc false
 
   @on_load {:init, 0}
+  @compile {:autoload, false}
   @app Mix.Project.config[:app]
   @env Mix.env
 
