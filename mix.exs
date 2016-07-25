@@ -1,3 +1,13 @@
+try do
+  :erlang.system_info(:dirty_cpu_schedulers)
+catch
+  _, _ -> IO.warn [
+    "You are using Nifsy on a BEAM without dirty schedulers. You must pass the `+sfwi Interval` ",
+    "flag to set a scheduler forced wakeup interval, or very bad things could happen. See the ",
+    "Nifsy README for more information."
+  ], []
+end
+
 defmodule Nifsy.Mixfile do
   use Mix.Project
 

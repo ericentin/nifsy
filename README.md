@@ -20,7 +20,7 @@ If dirty schedulers are not enabled (and they probably are not, unless you have 
 
 ### **If you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.**
 
-The value is in milliseconds, and should be configured based on your application's needs. Lower values may result in increased overhead due to unnecessary scheduler wakeups, and a high value may result in increased time spent doing nothing.
+The value is in milliseconds, and should be configured based on your application's needs. Lower values may result in increased overhead due to unnecessary scheduler wakeups, and a high value may result in increased time spent doing nothing. You can pass this to `elixir` and `iex` like `--erl "+sfwi 100"`.
 
 Depending on your application/architecture, this may or may not be OK. For instance, in a data pipeline, you may have a node which downloads a file, reads it into memory, transforms it, and then loads it into a database. If the node does nothing else, the fact that Nifsy FS ops block is probably not a big deal, as long as the `+sfwi` flag is set.
 
