@@ -4,6 +4,10 @@
 
 A nifty NIF for the FS, providing faster filesystem operations.
 
+Nifsy is available on [Hex](https://hex.pm/packages/nifsy).
+
+Full documentation is available on [Hex](https://hexdocs.pm/nifsy/).
+
 More developers are using Elixir for data processing, and the speed at which we read and write to files has lately become a concern. Due to the way FS interaction is currently handled in OTP (via a port driver), there is a considerable amount of overhead, which results in limited performance.
 
 By implementing FS operations as NIFs (Native Implemented Functions), we can remove this overhead and achieve close-to-C levels of performance. Generally, Nifsy operations are 4 to **25 times** faster than their maximally-optimized equivalents in `File`/`:file`.

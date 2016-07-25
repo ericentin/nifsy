@@ -27,7 +27,7 @@ defmodule Nifsy.Mixfile do
      package: package,
      source_url: "https://github.com/antipax/nifsy",
      docs: [
-       main: "Nifsy",
+       main: "readme",
        extras: ["README.md"],
        source_ref: "v#{@version}"
     ]]
