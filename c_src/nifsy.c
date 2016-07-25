@@ -33,12 +33,16 @@ typedef struct {
 #endif
 
 #define RW_UNLOCK                                                              \
-  if (handle->rwlock != 0)                                                     \
-  enif_rwlock_rwunlock(handle->rwlock)
+  ({                                                                           \
+    if (handle->rwlock != 0)                                                   \
+      enif_rwlock_rwunlock(handle->rwlock);                                    \
+  })
 
 #define RW_LOCK                                                                \
-  if (handle->rwlock != 0)                                                     \
-  enif_rwlock_rwlock(handle->rwlock)
+  ({                                                                           \
+    if (handle->rwlock != 0)                                                   \
+      enif_rwlock_rwlock(handle->rwlock);                                      \
+  })
 
 #define RETURN_BADARG(code)                                                    \
   ({                                                                           \
@@ -91,6 +95,8 @@ static ERL_NIF_TERM ATOM_SYNC;
 static ERL_NIF_TERM ATOM_DSYNC;
 static ERL_NIF_TERM ATOM_LOCK;
 
+static mode_t NIFSY_DEFAULT_PERM = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+
 #ifdef ERTS_DIRTY_SCHEDULERS
 #define DIRTINESS ERL_NIF_DIRTY_JOB_IO_BOUND
 #else
@@ -98,17 +104,23 @@ static ERL_NIF_TERM ATOM_LOCK;
 #endif
 
 static int nifsy_do_close(nifsy_handle *handle, bool from_dtor) {
+  int result = 0;
+
+  if (!handle->closed && handle->mode & O_WRONLY && handle->buffer_offset) {
+    result = (int)write(handle->file_descriptor, handle->buffer->data,
+                        handle->buffer_offset);
+  }
+
   if (from_dtor) {
-    int result = close(handle->file_descriptor);
+    result = close(handle->file_descriptor);
     if (handle->buffer) {
       enif_release_binary(handle->buffer);
     }
-    return result;
   } else {
     handle->closed = true;
   }
 
-  return 0;
+  return result;
 }
 
 static void nifsy_dtor(ErlNifEnv *env, void *arg) {
@@ -204,7 +216,7 @@ static ERL_NIF_TERM nifsy_open(ErlNifEnv *env, int argc,
   HANDLE_ERROR(decode_options(env, argv[2], &mode, &lock), { enif_free(path); },
                "badarg");
 
-  int file_descriptor = open(path, mode);
+  int file_descriptor = open(path, mode, NIFSY_DEFAULT_PERM);
 
   enif_free(path);
 
@@ -275,7 +287,8 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return enif_make_binary(env, &return_bytes);
+      return enif_make_tuple2(env, ATOM_OK,
+                              enif_make_binary(env, &return_bytes));
     } else {
       DEBUG_LOG("c not enough data");
       memcpy(return_bytes.data, rem_data, rem_data_size);
@@ -304,12 +317,13 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
         HANDLE_ERROR(enif_realloc_binary(&return_bytes, return_bytes_offset),
                      { RW_UNLOCK; }, MEMERR);
         RW_UNLOCK;
-        return enif_make_binary(env, &return_bytes);
+        return enif_make_tuple2(env, ATOM_OK,
+                                enif_make_binary(env, &return_bytes));
       } else {
         DEBUG_LOG("g eof");
         enif_release_binary(&return_bytes);
         RW_UNLOCK;
-        return enif_make_atom(env, "eof");
+        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
       }
     }
 
@@ -323,7 +337,8 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return enif_make_binary(env, &return_bytes);
+      return enif_make_tuple2(env, ATOM_OK,
+                              enif_make_binary(env, &return_bytes));
     } else {
       DEBUG_LOG("i not enough bytes");
       memcpy(return_bytes.data + return_bytes_offset, handle->buffer->data,
@@ -370,7 +385,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
 
       RW_UNLOCK;
 
-      return new_line_term;
+      return enif_make_tuple2(env, ATOM_OK, new_line_term);
     } else {
       DEBUG_LOG("c newline not found");
       HANDLE_ERROR(enif_alloc_binary(rem_data_size, &new_line_buffer),
@@ -401,11 +416,12 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
       if (new_line_buffer.data) {
         DEBUG_LOG("g buffer existed");
         RW_UNLOCK;
-        return enif_make_binary(env, &new_line_buffer);
+        return enif_make_tuple2(env, ATOM_OK,
+                                enif_make_binary(env, &new_line_buffer));
       } else {
         DEBUG_LOG("h eof");
         RW_UNLOCK;
-        return enif_make_atom(env, "eof");
+        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
       }
     }
 
@@ -428,7 +444,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
         handle->buffer_offset = handle->buffer_offset + line_size + 1;
         RW_UNLOCK;
 
-        return new_line_term;
+        return enif_make_tuple2(env, ATOM_OK, new_line_term);
       } else {
         DEBUG_LOG("l new line buffer create");
         HANDLE_ERROR(enif_alloc_binary(line_size, &new_line_buffer),
@@ -439,7 +455,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
         handle->buffer_offset = handle->buffer_offset + line_size + 1;
         RW_UNLOCK;
 
-        return new_line_term;
+        return enif_make_tuple2(env, ATOM_OK, new_line_term);
       }
     } else {
       DEBUG_LOG("m newline not found");
@@ -469,7 +485,76 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
 
 static ERL_NIF_TERM nifsy_write(ErlNifEnv *env, int argc,
                                 const ERL_NIF_TERM argv[]) {
-  return enif_make_atom(env, "undef");
+  nifsy_handle *handle;
+  ErlNifBinary write_binary;
+
+  RETURN_BADARG(
+      enif_get_resource(env, argv[0], NIFSY_RESOURCE, (void **)&handle));
+  RETURN_BADARG(!handle->closed);
+  RETURN_BADARG(handle->mode & O_WRONLY);
+  RETURN_BADARG(enif_inspect_iolist_as_binary(env, argv[1], &write_binary));
+
+  RW_LOCK;
+
+  unsigned long remaining_buffer_bytes =
+      handle->buffer->size - handle->buffer_offset;
+
+  if (remaining_buffer_bytes > write_binary.size) {
+    memcpy(handle->buffer->data + handle->buffer_offset, write_binary.data,
+           write_binary.size);
+    handle->buffer_offset += write_binary.size;
+  } else {
+    unsigned long write_binary_offset = 0,
+                  write_binary_remaining = write_binary.size;
+
+    while (write_binary_remaining) {
+      memcpy(handle->buffer->data + handle->buffer_offset,
+             write_binary.data + write_binary_offset, remaining_buffer_bytes);
+
+      HANDLE_ERROR_IF_NEG(write(handle->file_descriptor, handle->buffer->data,
+                                handle->buffer->size),
+                          { RW_UNLOCK; });
+
+      write_binary_remaining -= remaining_buffer_bytes;
+      write_binary_offset += remaining_buffer_bytes;
+
+      if (write_binary_remaining < handle->buffer->size) {
+        memcpy(handle->buffer->data, write_binary.data + write_binary_offset,
+               write_binary_remaining);
+        handle->buffer_offset = write_binary_remaining;
+        write_binary_remaining = 0;
+      } else {
+        handle->buffer_offset = 0;
+        remaining_buffer_bytes = handle->buffer->size;
+      }
+    }
+  }
+
+  RW_UNLOCK;
+
+  return ATOM_OK;
+}
+
+static ERL_NIF_TERM nifsy_flush(ErlNifEnv *env, int argc,
+                                const ERL_NIF_TERM argv[]) {
+  nifsy_handle *handle;
+  RETURN_BADARG(
+      enif_get_resource(env, argv[0], NIFSY_RESOURCE, (void **)&handle));
+  RETURN_BADARG(!handle->closed);
+  RETURN_BADARG(handle->mode & O_WRONLY);
+
+  RW_LOCK;
+
+  if (handle->buffer_offset) {
+    HANDLE_ERROR_IF_NEG(write(handle->file_descriptor, handle->buffer->data,
+                              handle->buffer_offset),
+                        { RW_UNLOCK; });
+    handle->buffer_offset = 0;
+  }
+
+  RW_UNLOCK;
+
+  return ATOM_OK;
 }
 
 static ERL_NIF_TERM nifsy_close(ErlNifEnv *env, int argc,
@@ -491,6 +576,7 @@ static ErlNifFunc nif_funcs[] = {{"open", 3, nifsy_open, DIRTINESS},
                                  {"read", 2, nifsy_read, DIRTINESS},
                                  {"read_line", 1, nifsy_read_line, DIRTINESS},
                                  {"write", 2, nifsy_write, DIRTINESS},
+                                 {"flush", 1, nifsy_flush, DIRTINESS},
                                  {"close", 1, nifsy_close, DIRTINESS}};
 
-ERL_NIF_INIT(Elixir.Nifsy, nif_funcs, &nifsy_on_load, NULL, NULL, NULL)
+ERL_NIF_INIT(Elixir.Nifsy.Native, nif_funcs, &nifsy_on_load, NULL, NULL, NULL)

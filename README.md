@@ -1,6 +1,28 @@
+[![Build Status](https://travis-ci.org/antipax/nifsy.svg?branch=master)](https://travis-ci.org/antipax/nifsy)
+
 # Nifsy
 
-A nifty Elixir NIF for the FS.
+A nifty NIF for the FS, providing faster filesystem operations.
+
+More developers are using Elixir for data processing, and the speed at which we read and write to files has lately become a concern. Due to the way FS interaction is currently handled in OTP (via a port driver), there is a considerable amount of overhead, which results in limited performance.
+
+By implementing FS operations as NIFs (Native Implemented Functions), we can remove this overhead and achieve close-to-C levels of performance. Generally, Nifsy operations are 4 to **25 times** faster than their maximally-optimized equivalents in `File`/`:file`.
+
+## Obligatory NIF warning
+
+Nifsy is a NIF, which means that **if it crashes, the entire node will crash**. This single fact may eliminate it as a possibility for some applications. However, there is full test coverage for Nifsy, and due to its nature as a simple wrapper for the basic POSIX open/read/write/close syscalls, this is fairly unlikely.
+
+## Blocking is Dirty
+
+Nifsy can be used on a BEAM which has been compiled with dirty scheduler support (via `./configure --enable-dirty-schedulers`), or one which has not. If dirty schedulers are not enabled, it is important to note that all Nifsy operations could block for an indefinite amount of time. Since the BEAM's scheduler expects all NIFs to complete in approximately 1ms, this means that the scheduler could become entirely blocked with FS ops, resulting in impacts to overall latency.
+
+Depending on your application/architecture, this may be fine. For instance, in a data pipeline, you may have a node which downloads a file, reads it into memory, transforms it, and then loads it into a database. If the node does nothing else, the fact that Nifsy FS ops block is probably not a big deal.
+
+If dirty schedulers are enabled, there is no longer a problem as Nifsy FS ops will run on the dirty schedulers and thus not block the regular BEAM scheduler. However, using the dirty schedulers imposes a performance cost due to extra synchronization and copying. This may result in operations on small files taking longer with Nifsy than without, though on large files (depending on buffer size), Nifsy will still result in anywhere from 2 to 4 times better performance.
+
+## Performance tips
+
+Using the streaming API (`stream!`) incurs an overhead, so if you implement your application's functionality directly with `open`/`read`/`read_line`/`write`/`flush`/`close`, you may see an improvement in speed. However, you will lose the ability to automatically integrate with any stream-aware Elixir code.
 
 ## Benchmarking
 
@@ -10,23 +32,27 @@ For read_line, `mix run bench/read_line_bench.exs`:
 
 | name                |      total |    usec/iter |  usec/line |
 | ------------------- | ---------: | -----------: | ---------: |
-| 1 KB (16 B) - nifsy |       3061 |        61.22 |      1.360 |
-| 1 KB (16 B) - file  |       7917 |       158.34 |      3.519 |
-| 1 KB (1 KB) - nifsy |        996 |        19.92 |      0.443 |
-| 1 KB (1 KB) - file  |       6626 |       132.52 |      2.945 |
-| 1 KB (64KB) - nifsy |        854 |        17.08 |      0.380 |
-| 1 KB (64KB) - file  |       6950 |       139.00 |      3.089 |
-| 1 MB (1 KB) - nifsy |      87221 |      1744.42 |      1.205 |
-| 1 MB (1 KB) - file  |    1730385 |     34607.70 |     23.900 |
-| 1 MB (64KB) - nifsy |      33075 |       661.50 |      0.457 |
-| 1 MB (64KB) - file  |     145792 |      2915.84 |      2.014 |
-| 1 MB (1 MB) - nifsy |      70736 |      1414.72 |      0.977 |
-| 1 MB (1 MB) - file  |     138290 |      2765.80 |      1.910 |
-| 1 GB (1 KB) - nifsy |   11310163 |   1131016.30 |     24.406 |
-| 1 GB (1 KB) - file  |   13666416 |   1366641.60 |     29.491 |
-| 1 GB (64KB) - nifsy |    3488617 |    348861.70 |      7.528 |
-| 1 GB (64KB) - file  |    8099967 |    809996.70 |     17.479 |
-| 1 GB (1 MB) - nifsy |    3667947 |    366794.70 |      7.915 |
-| 1 GB (1 MB) - file  |    4649991 |    464999.10 |     10.034 |
-| 1 GB (1 GB) - nifsy |   35080356 |   3508035.60 |     75.700 |
-| 1 GB (1 GB) - file  |   25042723 |   2504272.30 |     54.040 |
+| 1 KB (16 B) - nifsy |       3246 |        64.92 |      1.443 |
+| 1 KB (16 B) - file  |      13248 |       264.96 |      5.888 |
+| 1 KB (1 KB) - nifsy |       2291 |        45.82 |      1.018 |
+| 1 KB (1 KB) - file  |       6879 |       137.58 |      3.057 |
+| 1 KB (64KB) - nifsy |       1106 |        22.12 |      0.492 |
+| 1 KB (64KB) - file  |       9543 |       190.86 |      4.241 |
+| 1 MB (1 KB) - nifsy |      83880 |      1677.60 |      1.159 |
+| 1 MB (1 KB) - file  |    1598955 |     31979.10 |     22.085 |
+| 1 MB (64KB) - nifsy |      39978 |       799.56 |      0.552 |
+| 1 MB (64KB) - file  |     145726 |      2914.52 |      2.013 |
+| 1 MB (1 MB) - nifsy |      71193 |      1423.86 |      0.983 |
+| 1 MB (1 MB) - file  |     104737 |      2094.74 |      1.447 |
+| 1 GB (1 KB) - nifsy |   14401603 |   1440160.30 |     31.077 |
+| 1 GB (1 KB) - file  |   18981727 |   1898172.70 |     40.961 |
+| 1 GB (64KB) - nifsy |    3887583 |    388758.30 |      8.389 |
+| 1 GB (64KB) - file  |   11666435 |   1166643.50 |     25.175 |
+| 1 GB (1 MB) - nifsy |    4036145 |    403614.50 |      8.710 |
+| 1 GB (1 MB) - file  |    4832690 |    483269.00 |     10.429 |
+| 1 GB (1 GB) - nifsy |   36451711 |   3645171.10 |     78.660 |
+| 1 GB (1 GB) - file  |   26565286 |   2656528.60 |     57.326 |
+
+## Development
+
+Nifsy C code should be formatted using the `clang-format` tool. Nifsy C code uses the default code style rules in `clang-format`, so there is no need to specify any specific preset. If you wish to contribute C code to Nifsy, please ensure your code is formatted properly before opening a PR.
