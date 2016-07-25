@@ -10,7 +10,7 @@ defmodule Nifsy.Handle do
     path: Path.t
   }
 
-  module = __MODULE__
+  module = inspect(__MODULE__)
 
   defimpl Inspect do
     import Inspect.Algebra
@@ -22,7 +22,7 @@ defmodule Nifsy.Handle do
         |> Map.delete(:handle)
         |> Keyword.new()
 
-      concat ["#", inspect(unquote(module)), "<", to_doc(attrs, opts), ">"]
+      concat ["#", unquote(module), "<", to_doc(attrs, opts), ">"]
     end
   end
 end
