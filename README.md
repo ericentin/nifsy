@@ -8,11 +8,11 @@ More developers are using Elixir for data processing, and the speed at which we 
 
 By implementing FS operations as NIFs (Native Implemented Functions), we can remove this overhead and achieve close-to-C levels of performance. Generally, Nifsy operations are 4 to **25 times** faster than their maximally-optimized equivalents in `File`/`:file`.
 
-# Obligatory NIF warning
+## Obligatory NIF warning
 
 Nifsy is a NIF, which means that **if it crashes, the entire node will crash**. This single fact may eliminate it as a possibility for some applications. However, there is full test coverage for Nifsy, and due to its nature as a simple wrapper for the basic POSIX open/read/write/close syscalls, this is fairly unlikely.
 
-# Blocking is Dirty
+## Blocking is Dirty
 
 Nifsy can be used on a BEAM which has been compiled with dirty scheduler support (via `./configure --enable-dirty-schedulers`), or one which has not. If dirty schedulers are not enabled, it is important to note that all Nifsy operations could block for an indefinite amount of time. Since the BEAM's scheduler expects all NIFs to complete in approximately 1ms, this means that the scheduler could become entirely blocked with FS ops, resulting in impacts to overall latency.
 
@@ -20,7 +20,7 @@ Depending on your application/architecture, this may be fine. For instance, in a
 
 If dirty schedulers are enabled, there is no longer a problem as Nifsy FS ops will run on the dirty schedulers and thus not block the regular BEAM scheduler. However, using the dirty schedulers imposes a performance cost due to extra synchronization and copying. This may result in operations on small files taking longer with Nifsy than without, though on large files (depending on buffer size), Nifsy will still result in anywhere from 2 to 4 times better performance.
 
-# Performance tips
+## Performance tips
 
 Using the streaming API (`stream!`) incurs an overhead, so if you implement your application's functionality directly with `open`/`read`/`read_line`/`write`/`flush`/`close`, you may see an improvement in speed. However, you will lose the ability to automatically integrate with any stream-aware Elixir code.
 
