@@ -10,7 +10,6 @@
 #pragma clang diagnostic ignored "-Wreserved-id-macro"
 #pragma clang diagnostic ignored "-Wpadded"
 #include "erl_nif.h"
-#include "uv.h"
 #pragma clang diagnostic pop
 
 static ErlNifResourceType *NIFSY_RESOURCE;
