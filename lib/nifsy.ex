@@ -51,7 +51,7 @@ defmodule Nifsy do
   def open(path, mode \\ :read, options \\ [])
   when is_binary(path) and mode in [:read, :write] and is_list(options) do
     path_charlist = to_charlist(path)
-    case init_options(options) do
+    case init_options(options, {[], nil}) do
       {:ok, {options, buffer_bytes}} ->
         buffer_bytes = if buffer_bytes, do: buffer_bytes, else: @default_buffer_bytes
         case Native.open(path_charlist, buffer_bytes, [mode | options]) do
@@ -148,17 +148,21 @@ defmodule Nifsy do
     %Nifsy.Stream{path: path, options: options}
   end
 
-  defp init_options(options) do
-    Enum.reduce_while options, {:ok, {[], nil}}, fn
-      {:buffer_bytes, buffer_bytes}, {:ok, {options, curr_buffer_bytes}}
-      when is_integer(buffer_bytes) and buffer_bytes > 0 ->
-        {:cont, {:ok, {options, if(curr_buffer_bytes, do: curr_buffer_bytes, else: buffer_bytes)}}}
+  defp init_options([], acc) do
+    {:ok, acc}
+  end
 
-      option, {:ok, {options, buffer_bytes}} when option in @options ->
-        {:cont, {:ok, {[option | options], buffer_bytes}}}
+  defp init_options([{:buffer_bytes, buffer_bytes} | rest], {options, curr_buffer_bytes})
+  when is_integer(buffer_bytes) and buffer_bytes > 0 do
+    init_options(rest, {options, if(curr_buffer_bytes, do: curr_buffer_bytes, else: buffer_bytes)})
+  end
 
-      option, _acc ->
-        {:halt, {:error, "invalid option #{option}"}}
-    end
+  defp init_options([option | rest], {options, buffer_bytes})
+  when option in @options do
+    init_options(rest, {options ++ [option], buffer_bytes})
+  end
+
+  defp init_options([option | _rest], _acc) do
+    {:error, "invalid option #{inspect option}"}
   end
 end

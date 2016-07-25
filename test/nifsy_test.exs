@@ -62,4 +62,10 @@ defmodule NifsyTest do
 
     assert File.read!("tmp/test/test.txt") == "test\ntest2"
   end
+
+  test "invalid option" do
+    assert Nifsy.open("tmp/test/test.txt", :read, [:parp]) == {:error, "invalid option :parp"}
+
+    assert Nifsy.open("tmp/test/test.txt", :read, [{:parp, 1}]) == {:error, "invalid option {:parp, 1}"}
+  end
 end
