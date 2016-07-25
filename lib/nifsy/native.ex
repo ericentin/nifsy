@@ -11,26 +11,26 @@ defmodule Nifsy.Native do
   end
 
   def open(_path, _buffer_bytes, _options) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 
   def read(_handle, _bytes) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 
   def read_line(_handle) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 
   def write(_handle, _data) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 
   def flush(_handle) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 
   def close(_handle) do
-    exit(:nif_not_loaded)
+    exit(:nif_library_not_loaded)
   end
 end
