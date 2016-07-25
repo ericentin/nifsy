@@ -107,16 +107,15 @@ static int nifsy_do_close(nifsy_handle *handle, bool from_dtor) {
   int result = 0;
 
   if (!handle->closed && handle->mode & O_WRONLY && handle->buffer_offset) {
-    result = write(handle->file_descriptor, handle->buffer->data,
-                   handle->buffer_offset);
+    result = (int)write(handle->file_descriptor, handle->buffer->data,
+                        handle->buffer_offset);
   }
 
   if (from_dtor) {
-    int result = close(handle->file_descriptor);
+    result = close(handle->file_descriptor);
     if (handle->buffer) {
       enif_release_binary(handle->buffer);
     }
-    return result;
   } else {
     handle->closed = true;
   }
