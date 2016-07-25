@@ -12,13 +12,21 @@ By implementing FS operations as NIFs (Native Implemented Functions), we can rem
 
 Nifsy is a NIF, which means that **if it crashes, the entire node will crash**. This single fact may eliminate it as a possibility for some applications. However, there is full test coverage for Nifsy, and due to its nature as a simple wrapper for the basic POSIX open/read/write/close syscalls, this is fairly unlikely.
 
-## Blocking is Dirty
+You should also read the section below, since there are certain caveats to be aware of if you are running on a BEAM with/without dirty schedulers enabled.
 
-Nifsy can be used on a BEAM which has been compiled with dirty scheduler support (via `./configure --enable-dirty-schedulers`), or one which has not. If dirty schedulers are not enabled, it is important to note that all Nifsy operations could block for an indefinite amount of time. Since the BEAM's scheduler expects all NIFs to complete in approximately 1ms, this means that the scheduler could become entirely blocked with FS ops, resulting in impacts to overall latency.
+## Nifsy on BEAM without Dirty Schedulers
 
-Depending on your application/architecture, this may be fine. For instance, in a data pipeline, you may have a node which downloads a file, reads it into memory, transforms it, and then loads it into a database. If the node does nothing else, the fact that Nifsy FS ops block is probably not a big deal.
+If dirty schedulers are not enabled (and they probably are not, unless you have compiled OTP yourself with `./configure --enable-dirty-schedulers`), it is important to note that all Nifsy operations could block for an indefinite amount of time. Since the BEAM's scheduler expects all NIFs to complete in approximately 1ms, this means that the scheduler could become entirely blocked with FS ops, resulting in impacts to overall latency. Additionally, NIFs which take too much time to execute can result in "scheduler collapse," which is a serious condition in which the BEAM may stop executing code without crashing. Thus, **if you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.** Let me say that again:
 
-If dirty schedulers are enabled, there is no longer a problem as Nifsy FS ops will run on the dirty schedulers and thus not block the regular BEAM scheduler. However, using the dirty schedulers imposes a performance cost due to extra synchronization and copying. This may result in operations on small files taking longer with Nifsy than without, though on large files (depending on buffer size), Nifsy will still result in anywhere from 2 to 4 times better performance.
+**If you are going to use Nifsy on a BEAM without dirty schedulers, you must use the `+sfwi Interval` flag to set a scheduler forced wakeup interval.**
+
+The value is in milliseconds, and should be configured based on your application's needs. Lower values may result in increased overhead due to unnecessary scheduler wakeups, and a high value may result in increased time spent doing nothing.
+
+Depending on your application/architecture, this may or may not be OK. For instance, in a data pipeline, you may have a node which downloads a file, reads it into memory, transforms it, and then loads it into a database. If the node does nothing else, the fact that Nifsy FS ops block is probably not a big deal, as long as the `+sfwi` flag is set.
+
+## Nifsy on BEAM with Dirty Schedulers
+
+If dirty schedulers are enabled (via `./configure --enable-dirty-schedulers`), there is no longer a problem as Nifsy FS ops will run on the dirty schedulers and thus not block the regular BEAM scheduler. However, using the dirty schedulers imposes a performance cost due to extra synchronization and copying. This may result in operations on small files taking longer with Nifsy than without, though on large files (depending on buffer size), Nifsy will still result in anywhere from 2 to 4 times better performance.
 
 ## Performance tips
 
