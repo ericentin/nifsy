@@ -139,35 +139,12 @@ defmodule Nifsy do
   end
 
   @doc """
-  Return a `Stream` for the file at `path` with `mode` and `options`.
-
-  Like with `open/3`, a stream can only be opened in either `:read` or `:write` mode, and the mode
-  cannot be changed after the stream is created.
+  Return a `Stream` for the file at `path` with `options`.
 
   The `options` are the same as can be provided to `open/3`.
   """
-  @spec stream!(Path.t, mode, options) :: Enumerable.t | Collectable.t
-  def stream!(path, mode \\ :read, options \\ [])
-
-  def stream!(path, :read, options) do
-    start_fun =
-      fn ->
-        {:ok, handle} = open(path, :read, options)
-        handle.handle
-      end
-
-    next_fun =
-      fn handle ->
-        case Native.read_line(handle) do
-          :eof -> {:halt, handle}
-          {:ok, line} -> {[line], handle}
-        end
-      end
-
-    Stream.resource(start_fun, next_fun, &Native.close/1)
-  end
-
-  def stream!(path, :write, options) do
+  @spec stream!(Path.t, options) :: Stream.t
+  def stream!(path, options \\ []) do
     %Nifsy.Stream{path: path, options: options}
   end
 

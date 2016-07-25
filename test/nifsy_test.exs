@@ -51,14 +51,10 @@ defmodule NifsyTest do
     assert File.read!("tmp/test/test.txt") == "testtest2"
   end
 
-  test "read stream" do
+  test "stream" do
     File.write!("tmp/test/test.txt", "test\ntest2", [:append])
-    stream = Nifsy.stream!("tmp/test/test.txt")
+    stream = Nifsy.stream!("tmp/test/test.txt", [:create])
     assert Enum.to_list(stream) == ["test", "test2"]
-  end
-
-  test "write stream" do
-    stream = Nifsy.stream!("tmp/test/test.txt", :write, [:create])
 
     ["test", ["\n", "test", "2"]]
     |> Stream.into(stream)
