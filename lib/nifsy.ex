@@ -38,7 +38,7 @@ defmodule Nifsy do
 
   The rest of the options: `:append`, `:create`, `:dsync`, `:exclusive`, `:sync`, and `:truncate`,
   behave according to their corresponding options in the
-  [POSIX specification](http://pubs.opengroup.org/onlinepubs/9699919799/).
+  [POSIX specification](http://pubs.opengroup.org/onlinepubs/9699919799/functions/open.html).
 
   Given the low level nature of this API, behaviour, error codes, and error messages may not be
   perfectly identical across operating systems.
@@ -102,8 +102,7 @@ defmodule Nifsy do
   you wish to force the data to be written, you can use `flush/1` or `close/1`.
   """
   @spec write(Handle.t, iodata) :: :ok | {:error, term}
-  def write(%Handle{mode: :write} = handle, data)
-  when is_binary(data) do
+  def write(%Handle{mode: :write} = handle, data) do
     Native.write(handle.handle, data)
   end
 
@@ -134,20 +133,37 @@ defmodule Nifsy do
     Native.close(handle.handle)
   end
 
+  @doc """
+  Return a `Stream` for the file at `path` with `mode` and `options`.
+
+  Like with `open/3`, a stream can only be opened in either `:read` or `:write` mode, and the mode
+  cannot be changed after the stream is created.
+
+  The `options` are the same as can be provided to `open/3`.
+  """
+  @spec stream!(Path.t, mode, options) :: Enumerable.t | Collectable.t
   def stream!(path, mode \\ :read, options \\ [])
 
   def stream!(path, :read, options) do
-    Stream.resource fn ->
-      {:ok, handle} = open(path, :read, options)
-      handle.handle
-    end,
-    fn handle ->
-      case Native.read_line(handle) do
-        {:ok, :eof} -> {:halt, handle}
-        {:ok, line} -> {[line], handle}
+    start_fun =
+      fn ->
+        {:ok, handle} = open(path, :read, options)
+        handle.handle
       end
-    end,
-    &Native.close/1
+
+    next_fun =
+      fn handle ->
+        case Native.read_line(handle) do
+          {:ok, :eof} -> {:halt, handle}
+          {:ok, line} -> {[line], handle}
+        end
+      end
+
+    Stream.resource(start_fun, next_fun, &Native.close/1)
+  end
+
+  def stream!(path, :write, options) do
+    %Nifsy.Stream{path: path, options: options}
   end
 
   defp init_options(options) do

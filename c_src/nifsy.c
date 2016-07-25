@@ -91,6 +91,8 @@ static ERL_NIF_TERM ATOM_SYNC;
 static ERL_NIF_TERM ATOM_DSYNC;
 static ERL_NIF_TERM ATOM_LOCK;
 
+static mode_t NIFSY_DEFAULT_PERM = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+
 #ifdef ERTS_DIRTY_SCHEDULERS
 #define DIRTINESS ERL_NIF_DIRTY_JOB_IO_BOUND
 #else
@@ -208,7 +210,7 @@ static ERL_NIF_TERM nifsy_open(ErlNifEnv *env, int argc,
   HANDLE_ERROR(decode_options(env, argv[2], &mode, &lock), { enif_free(path); },
                "badarg");
 
-  int file_descriptor = open(path, mode);
+  int file_descriptor = open(path, mode, NIFSY_DEFAULT_PERM);
 
   enif_free(path);
 
