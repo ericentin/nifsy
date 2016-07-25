@@ -10,6 +10,7 @@
 #pragma clang diagnostic ignored "-Wreserved-id-macro"
 #pragma clang diagnostic ignored "-Wpadded"
 #include "erl_nif.h"
+#include "uv.h"
 #pragma clang diagnostic pop
 
 static ErlNifResourceType *NIFSY_RESOURCE;
@@ -323,7 +324,7 @@ static ERL_NIF_TERM nifsy_read(ErlNifEnv *env, int argc,
         DEBUG_LOG("g eof");
         enif_release_binary(&return_bytes);
         RW_UNLOCK;
-        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
+        return enif_make_atom(env, "eof");
       }
     }
 
@@ -421,7 +422,7 @@ static ERL_NIF_TERM nifsy_read_line(ErlNifEnv *env, int argc,
       } else {
         DEBUG_LOG("h eof");
         RW_UNLOCK;
-        return enif_make_tuple2(env, ATOM_OK, enif_make_atom(env, "eof"));
+        return enif_make_atom(env, "eof");
       }
     }
 

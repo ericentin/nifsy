@@ -75,9 +75,9 @@ defmodule Nifsy do
   A call will return `bytes` bytes, or fewer, if, for instance, there are less bytes than
   requested left in the file.
 
-  After the last byte has been returned, the function will return `{:ok, :eof}`.
+  After the last byte has been returned, the function will return `:eof`.
   """
-  @spec read(Handle.t, pos_integer) :: {:ok, binary | :eof} | {:error, term}
+  @spec read(Handle.t, pos_integer) :: {:ok, binary} | :eof | {:error, term}
   def read(%Handle{mode: :read} = handle, bytes)
   when is_integer(bytes) and bytes > 0 do
     Native.read(handle.handle, bytes)
@@ -91,9 +91,9 @@ defmodule Nifsy do
   Lines are considered delimited by `"\n"`, the delimiter is not returned, and using this
   function with files with CRLF line endings will return the CR at the end of the line.
 
-  After the final line has been returned, the function will return `{:ok, :eof}`.
+  After the final line has been returned, the function will return `:eof`.
   """
-  @spec read_line(Handle.t) :: {:ok, binary | :eof} | {:error, term}
+  @spec read_line(Handle.t) :: {:ok, binary} | :eof | {:error, term}
   def read_line(%Handle{mode: :read} = handle) do
     Native.read_line(handle.handle)
   end
@@ -159,7 +159,7 @@ defmodule Nifsy do
     next_fun =
       fn handle ->
         case Native.read_line(handle) do
-          {:ok, :eof} -> {:halt, handle}
+          :eof -> {:halt, handle}
           {:ok, line} -> {[line], handle}
         end
       end
