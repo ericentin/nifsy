@@ -57,6 +57,7 @@ defmodule Nifsy do
         case Native.open(path_charlist, buffer_bytes, [mode | options]) do
           {:ok, handle} ->
             {:ok, %Handle{buffer_bytes: buffer_bytes, handle: handle, mode: mode, path: path}}
+
           {:error, reason} ->
             {:error, reason}
         end
@@ -175,8 +176,10 @@ defmodule Nifsy do
       {:buffer_bytes, buffer_bytes}, {:ok, {options, curr_buffer_bytes}}
       when is_integer(buffer_bytes) and buffer_bytes > 0 ->
         {:cont, {:ok, {options, if(curr_buffer_bytes, do: curr_buffer_bytes, else: buffer_bytes)}}}
+
       option, {:ok, {options, buffer_bytes}} when option in @options ->
         {:cont, {:ok, {[option | options], buffer_bytes}}}
+
       option, _acc ->
         {:halt, {:error, "invalid option #{option}"}}
     end

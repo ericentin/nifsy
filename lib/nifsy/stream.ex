@@ -12,6 +12,7 @@ defmodule Nifsy.Stream do
       case Nifsy.open(path, :write, options) do
         {:ok, handle} ->
           {:ok, into(handle.handle, stream)}
+
         {:error, reason} ->
           raise "could not stream #{path}: #{inspect(reason)}"
       end
@@ -21,9 +22,11 @@ defmodule Nifsy.Stream do
       fn
         :ok, {:cont, x} ->
           Nifsy.Native.write(handle, x)
+
         :ok, :done ->
           :ok = Nifsy.Native.close(handle)
           stream
+
         :ok, :halt ->
           :ok = Nifsy.Native.close(handle)
       end
