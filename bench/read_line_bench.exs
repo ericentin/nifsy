@@ -87,7 +87,7 @@ defmodule Nifsy.ReadLineBench do
     read_line_loop =
       fn (f, file_desc, size) ->
         case Nifsy.read_line(file_desc) do
-          {:ok, :eof} -> size
+          :eof -> size
           {:ok, line} -> f.(f, file_desc, size + byte_size(line) + 1)
         end
       end
